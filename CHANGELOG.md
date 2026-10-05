@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 - 2026-10-05
 
 Initial alpha: deterministic number and date checks, model-judged claims with
 verbatim quotes, document/transcript/directory evidence, ruff-style rule codes,
