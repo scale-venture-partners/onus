@@ -63,7 +63,7 @@ def run(use_model: bool, model=None, cases_file: Path = HERE / "cases.json") -> 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--model", nargs="?", const="anthropic:claude-sonnet-4-6", default=None,
+    p.add_argument("--model", nargs="?", const="anthropic:claude-sonnet-5-5", default=None,
                    help="run the full pipeline, optionally naming the model")
     args = p.parse_args(argv)
     rows = run(args.model is not None, args.model)

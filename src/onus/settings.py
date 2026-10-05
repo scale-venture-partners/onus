@@ -22,7 +22,7 @@ class Settings:
     ignore: tuple[str, ...] = ()
     extend_select: tuple[str, ...] = ()
     llm: bool = True
-    model: str = "anthropic:claude-sonnet-4-6"
+    model: str = "anthropic:claude-sonnet-5-5"
     judge_threshold: float = 0.7
     concurrency: int = 8
     transcript_exclude_tools: list[str] = field(default_factory=lambda: list(LOCAL_TOOLS))

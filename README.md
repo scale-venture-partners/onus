@@ -151,15 +151,15 @@ deck: bike-share annual update           7/7           0      16
 memo: planted fabrications               4/4           0       9
 
 $ uv run python evals/run.py --model       # the full pipeline
-deck: bike-share annual update           8/9           0      17
-    missed: The repair backlog is now below weekly capacity
-memo: planted fabrications               4/4           0      11
+deck: bike-share annual update           9/9           0      19
+memo: planted fabrications               4/4           0       9
 ```
 
 The deterministic layer is held to perfect recall and no false positives on
 these cases, as a test (`tests/test_cli.py`), because it's the part allowed
 to refuse an answer. The model tier is measured, not guaranteed: it can miss a
-claim with no number in it (as above), and results vary by model and run.
+claim with no number in it (an older Sonnet missed one on this deck), and
+results vary by model and run.
 
 ## Limits
 
@@ -183,7 +183,7 @@ select = ["ONS0", "ONS1"]
 ignore = ["ONS003"]
 extend-select = ["ONS004"]
 llm = true
-model = "anthropic:claude-sonnet-4-6"    # any pydantic-ai model string
+model = "anthropic:claude-sonnet-5-5"    # any pydantic-ai model string
 judge-threshold = 0.7
 concurrency = 8
 transcript-exclude-tools = ["read", "write", "edit", "bash", "ls", "find", "grep"]
