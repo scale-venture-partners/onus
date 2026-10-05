@@ -1,0 +1,39 @@
+{
+  "about": "Labelled cases: a deck and a memo with planted fabrications, checked against a short fact sheet. `expect` lists what must be flagged; `clean` lists claim text that must not be. `model` entries are only scored when the model runs.",
+  "cases": [
+    {
+      "name": "deck: bike-share annual update",
+      "document": "fixtures/bike_share_update.pptx",
+      "evidence": ["fixtures/bike_share_facts.md"],
+      "expect": [
+        {"code": "ONS002", "number": "Q1 2025", "text": "Q1 2025"},
+        {"code": "ONS002", "number": "Q1 2025", "text": "Riverside internal data, Q1 2025."},
+        {"code": "ONS002", "number": "Q1 2025", "text": "Riverside internal view, Q1 2025."},
+        {"code": "ONS001", "number": "95%", "text": "renewal above 95%"},
+        {"code": "ONS002", "number": "18 months", "text": "over 18 months"},
+        {"code": "ONS002", "number": "2023", "text": "the 2023 flood closures"},
+        {"code": "ONS002", "number": "Q2", "text": "One ask before Q2."},
+        {"code": "ONS102", "model": true, "text": "The repair backlog is now below weekly capacity"},
+        {"code": "ONS101", "model": true, "text": "Riders keep coming back because the stations sit beside daily commute routes"}
+      ],
+      "clean": ["$2.4M", "Up 42% year over year", "88%", "Repair backlog at 1.4x capacity, down from 2.1x", "24",
+                "Two thirds of new docks are going here.", "Confirm Q3 maintenance window by 15 March.",
+                "Where we are expanding in 2026."]
+    },
+    {
+      "name": "memo: planted fabrications",
+      "document": "fixtures/bike_share_memo.md",
+      "evidence": ["fixtures/bike_share_facts.md"],
+      "expect": [
+        {"code": "ONS003", "number": "Eight", "text": "Eight of our 24 stations sit on hills."},
+        {"code": "ONS002", "number": "2023", "text": "down from 2.1x in 2023"},
+        {"code": "ONS002", "number": "two years", "text": "Repair turnaround improved 33% in two years."},
+        {"code": "ONS002", "number": "Q4 2025", "text": "active as of Q4 2025"}
+      ],
+      "clean": ["Fare revenue reached $2.4M, up 42% year over year.", "Member renewal rate is 88%.",
+                "Two thirds of new docks go to the east bank.",
+                "Please confirm Q3 maintenance window by 15 March."],
+      "clean_with_model": ["We hold three plans for 2026."]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Sync
+        run: uv sync
+      - name: Lint
+        run: uv run ruff check src tests evals
+      - name: Types
+        run: uv run mypy
+      - name: Test
+        # Hermetic: the model is pydantic-ai's TestModel; the labelled eval runs offline.
+        run: uv run pytest -q --cov
