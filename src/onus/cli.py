@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="skip these paths inside an evidence directory (e.g. 'tests/*'); repeatable")
     p.add_argument("--evidence-text", action="append", default=[], metavar="TEXT", help="evidence given inline")
     p.add_argument("--no-llm", action="store_true", help="numbers and dates only; no model calls")
+    p.add_argument("--no-images", action="store_true", help="leave a document's pictures (charts, KPI tiles) unread")
     p.add_argument("--model", help="pydantic-ai model for extraction and judging")
     p.add_argument("--select", help="only these rule codes/prefixes (comma-separated)")
     p.add_argument("--ignore", help="disable these rule codes/prefixes")
@@ -114,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         s.ignore = s.ignore + _codes(args.ignore)
         s.extend_select = s.extend_select + _codes(args.extend_select)
         s.llm = s.llm and not args.no_llm
+        s.images = s.images and not args.no_images
         s.model = args.model or s.model
         if s.llm and (env := _missing_key(s.model)):
             print(f"onus: the model rules need {env}. Set it, or pass --no-llm to check numbers and dates "

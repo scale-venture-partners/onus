@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from onus import claims as claims_mod
-from onus import documents, verify
+from onus import documents, images, verify
 from onus.evidence import Evidence
 from onus.rules import RULES
 from onus.settings import Settings
@@ -34,8 +35,7 @@ class Result:
 
     def sorted(self) -> list[Finding]:
         def order(f):
-            n = f.label.split()[-1]
-            return (int(n) if n.isdigit() else 0, f.code)
+            return ([int(n) for n in re.findall(r"\d+", f.label)], f.code)
         return sorted(self.findings, key=order)
 
 
@@ -49,6 +49,10 @@ def check(path: str | Path, evidence: Evidence, settings: Settings, model=None) 
     use_model = settings.llm  # extraction and the judge; tier 1 runs either way
     model = model or settings.model
     notes = list(evidence.notes)
+    if doc.figures and use_model and settings.images:
+        notes += images.transcribe(doc, model, settings.concurrency)
+    elif doc.figures:
+        notes.append(f"images: {len(doc.figures)} not read ({'--no-images' if use_model else '--no-llm'})")
 
     if use_model:
         extracted = claims_mod.model_claims(doc, model)

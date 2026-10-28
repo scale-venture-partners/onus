@@ -22,6 +22,7 @@ class Settings:
     ignore: tuple[str, ...] = ()
     extend_select: tuple[str, ...] = ()
     llm: bool = True
+    images: bool = True
     model: str = "anthropic:claude-sonnet-5-5"
     judge_threshold: float = 0.7
     concurrency: int = 8

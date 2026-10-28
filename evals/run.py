@@ -4,7 +4,7 @@
     uv run python evals/run.py --model      # the full pipeline (needs a key)
 
 For each case: every `expect` entry must be flagged with its code (recall),
-and no finding may land on a `clean` claim (false positives). `model` entries
+and no finding may land on a `clean` claim or number (false positives). `model` entries
 and `clean_with_model` claims are scored only when the model runs. Prints a
 table and exits 1 if numbers-only recall is below 100% or anything clean was
 flagged -- the deterministic layer is the part that gets to refuse an answer,
@@ -48,9 +48,12 @@ def score_case(case: dict, use_model: bool, model=None) -> dict:
     expected = [e for e in case["expect"] if use_model or not e.get("model")]
     found = [e for e in expected if hit(e)]
     clean = case["clean"] + (case.get("clean_with_model", []) if use_model else [])
-    # A false positive is a flag on text that sits inside a clean claim; a flagged sentence that merely
-    # contains a clean number ("1.4x ... over 18 months") is a hit on the fabrication next to it.
-    false_positives = [(f.code, f.snippet) for f in findings if any(_norm(f.snippet) in _norm(c) for c in clean)]
+    # A false positive is a flag on text inside a clean claim, or on a number listed clean by itself; a flagged
+    # sentence that merely contains a clean number ("1.4x ... over 18 months") is a hit on the fabrication next to it.
+    def wrong(f):
+        number = _norm(f.message.split(":")[0])
+        return any(_norm(f.snippet) in _norm(c) or number == _norm(c) for c in clean)
+    false_positives = [(f.code, f.snippet) for f in findings if wrong(f)]
     return {"name": case["name"], "expected": len(expected), "found": len(found),
             "missed": [e["text"] for e in expected if e not in found], "false_positives": false_positives,
             "findings": len(findings), "claims": len(result.claims)}

@@ -41,8 +41,8 @@ def render_text(results: list[Result], stream=None, summary: bool = True) -> Non
 
 
 def _claim(c) -> dict:
-    return {"location": c.label, "text": c.text, "kind": c.kind, "subject": c.subject, "found_by": c.source,
-            "status": c.status, "numbers": [q.raw for q in c.quantities],
+    return {"location": c.label, "origin": c.block.origin, "text": c.text, "kind": c.kind, "subject": c.subject,
+            "found_by": c.source, "status": c.status, "numbers": [q.raw for q in c.quantities],
             "evidence": {"source": c.evidence_source, "quote": c.quote} if c.evidence_source else None,
             "derivations": c.derivations, "reason": c.reason or None, "confidence": c.confidence}
 

@@ -1,5 +1,5 @@
 {
-  "about": "Labelled cases: a deck and a memo with planted fabrications, checked against a short fact sheet. `expect` lists what must be flagged; `clean` lists claim text that must not be. `model` entries are only scored when the model runs.",
+  "about": "Labelled cases: a deck and a memo with planted fabrications, checked against a short fact sheet. `expect` lists what must be flagged; `clean` lists claim text, or a number on its own, that must not be. `model` entries are only scored when the model runs.",
   "cases": [
     {
       "name": "deck: bike-share annual update",
@@ -62,6 +62,18 @@
         {"code": "ONS002", "number": "Q4 2025", "text": "Riverside internal data, Q4 2025."}
       ],
       "clean": ["$2.4M", "Up 42% year over year", "88%",
+                "Two thirds of new docks are going to the east bank."]
+    },
+    {
+      "name": "deck: charts as pictures",
+      "document": "fixtures/bike_share_charts.pptx",
+      "evidence": ["fixtures/bike_share_facts.md"],
+      "expect": [
+        {"code": "ONS001", "model": true, "number": "1.2x", "text": "1.2x"},
+        {"code": "ONS002", "model": true, "number": "Q4 2025", "text": "Q4 2025"},
+        {"code": "ONS001", "model": true, "number": "$3.1M", "text": "$3.1M"}
+      ],
+      "clean": ["2.1x", "1.4x", "33%", "$2.4M", "42%", "88%",
                 "Two thirds of new docks are going to the east bank."]
     }
   ]

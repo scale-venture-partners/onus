@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- A document's pictures are read. The model transcribes what a chart, table,
+  KPI tile or screenshot prints, one statement per line, and the lines are
+  checked like the slide's text, under the picture's location ("slide 3
+  (image 1)"). Only what is printed is transcribed, never a value read off an
+  axis. Every picture goes to the model, which says when there is nothing to
+  check; only a vector format or an oversized file, which the API refuses, is
+  skipped, with a note. `--no-images` leaves every picture unread.
+
 - A deck's grouped shapes are read, including groups inside groups. A group
   has no text of its own, so a number in a grouped KPI tile was neither checked
   nor usable as evidence.

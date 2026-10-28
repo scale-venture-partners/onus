@@ -1,19 +1,27 @@
 """Evidence, claim extraction and the two verification tiers, with the model
 replaced by pydantic-ai's TestModel and FunctionModel."""
 
+import base64
+import io
 import json
+import zipfile
+from pathlib import Path
 
+from pydantic_ai import BinaryContent
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from onus import claims, documents, verify
+from onus import claims, documents, images, verify
 from onus import evidence as ev
-from onus.engine import check
+from onus.documents import Block, Document, Figure
+from onus.engine import Finding, Result, check
 from onus.settings import Settings
 
 FACTS = ("Fare revenue $2.4B, up 42% year over year; median repair backlog 1.4x, down from 2.1x; "
          "24 active stations. Plans: east bank, night shuttle, and cargo bikes.")
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5Erk"
+                       "Jggg==")
 
 
 def doc(tmp_path, text, name="memo.md"):
@@ -66,6 +74,159 @@ def test_grouped_shapes_are_read_through_their_groups(tmp_path):
     assert "$9.7M" in ev.load([tmp_path / "d.pptx"]).passages[0].text
 
 
+def deck(tmp_path, *shapes):
+    """A one-slide deck: a text box per string, a picture per bytes."""
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    prs = Presentation()
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    for shape in shapes:
+        if isinstance(shape, str):
+            s.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)).text_frame.text = shape
+        else:
+            s.shapes.add_picture(io.BytesIO(shape), Inches(1), Inches(2), width=Inches(5), height=Inches(3))
+    prs.save(tmp_path / "d.pptx")
+    return tmp_path / "d.pptx"
+
+
+def test_pictures_are_collected_with_their_place(tmp_path):
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    path = deck(tmp_path, "Network results", PNG)
+    prs = Presentation(path)
+    prs.slides[0].shapes.add_group_shape().shapes.add_picture(io.BytesIO(PNG + b"\0"), Inches(7), Inches(1), Inches(1))
+    prs.save(path)
+    d = documents.load(path)
+    assert [b.text for b in d.blocks] == ["Network results"]
+    assert [(f.location, f.media_type, f.data) for f in d.figures] == [
+        ("slide 1 (image 1)", "image/png", PNG), ("slide 1 (image 2)", "image/png", PNG + b"\0")]
+
+    import docx
+
+    w = docx.Document()
+    w.add_paragraph("ARR reached $2.4B.")
+    w.add_picture(io.BytesIO(PNG), width=Inches(4), height=Inches(2))
+    table = w.add_table(rows=1, cols=2)
+    cell = table.cell(0, 0).merge(table.cell(0, 1))
+    cell.paragraphs[0].add_run().add_picture(io.BytesIO(PNG), width=Inches(2), height=Inches(1))
+    w.save(tmp_path / "m.docx")
+    d = documents.load(tmp_path / "m.docx")
+    assert [(f.location, f.media_type, f.data, f.alt) for f in d.figures] == [
+        ("paragraph 2 (image 1)", "image/png", PNG, ""), ("table 1 (image 1)", "image/png", PNG, "")], \
+        "a picture in a merged cell is read once; a file-name alt text is no alt text"
+
+
+def repack(path, media, blob, content_type):
+    """Swap a deck's picture for bytes python-pptx cannot decode, declared as PowerPoint would."""
+    with zipfile.ZipFile(path) as z:
+        items = {name: z.read(name) for name in z.namelist()}
+    items[media] = blob
+    override = f'<Override PartName="/{media}" ContentType="{content_type}"/></Types>'.encode()
+    items["[Content_Types].xml"] = items["[Content_Types].xml"].replace(b"</Types>", override)
+    with zipfile.ZipFile(path, "w") as z:
+        for name, data in items.items():
+            z.writestr(name, data)
+
+
+def unlink(path, index=0):
+    """Make a saved deck's picture a link to a file outside it, as a deck pasted from the web may be."""
+    from pptx import Presentation
+    from pptx.oxml.ns import qn
+
+    prs = Presentation(path)
+    blip = [s for s in prs.slides[0].shapes if s.shape_type == 13][index]._element.blipFill.blip
+    del blip.attrib[qn("r:embed")]
+    blip.set(qn("r:link"), "rId99")
+    prs.save(path)
+
+
+def test_picture_types_are_read_as_declared_not_sniffed(tmp_path):
+    path = deck(tmp_path, PNG, PNG + b"\0", PNG + b"\0\0", PNG + b"\0\0\0")
+    unlink(path, 1)
+    repack(path, "ppt/media/image1.png", b"RIFF....WEBPVP8 ", "image/webp")
+    repack(path, "ppt/media/image3.png", b"\1\0\0\0", "image/x-emf")
+    repack(path, "ppt/media/image4.png", PNG, "image/JPG")
+    d = documents.load(path)
+    assert [(f.location, f.media_type, f.data) for f in d.figures] == [
+        ("slide 1 (image 1)", "image/webp", b"RIFF....WEBPVP8 "), ("slide 1 (image 3)", "image/x-emf", b"\1\0\0\0"),
+        ("slide 1 (image 4)", "image/jpeg", PNG)], \
+        "a linked picture is skipped but counted; WebP, EMF and a generator's image/JPG are read as declared"
+    assert ev.load([path]).passages == []
+
+
+def test_pictures_are_read_without_decoding_them(tmp_path, monkeypatch):
+    import docx
+    from pptx.util import Inches
+
+    path = deck(tmp_path, "Network results", PNG)
+    w = docx.Document()
+    w.add_picture(io.BytesIO(PNG), width=Inches(4), height=Inches(2))
+    w.save(tmp_path / "m.docx")
+
+    def decoded(*a, **kw):
+        raise AssertionError("decoded a picture")
+    monkeypatch.setattr("PIL.Image.open", decoded)
+    assert [(f.location, f.media_type, f.data) for f in documents.load(path).figures] == [
+        ("slide 1 (image 1)", "image/png", PNG)]
+    assert [(f.location, f.media_type, f.data) for f in documents.load(tmp_path / "m.docx").figures] == [
+        ("paragraph 1 (image 1)", "image/png", PNG)]
+
+
+def test_word_pictures_in_text_boxes_and_groups_are_read_once_each(tmp_path):
+    import docx
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+    from pptx.util import Inches
+
+    def wrap(paragraph, uri, holder, alt):
+        """Move the paragraph's pictures into one drawing of another kind, as Word nests them."""
+        drawings = paragraph._p.xpath(".//w:drawing")
+        outer = parse_xml(f'<w:drawing {nsdecls("w", "wp", "a")}><wp:inline><wp:docPr id="9" name="x" descr="{alt}"/>'
+                          f'<a:graphic><a:graphicData uri="{uri}">{holder}</a:graphicData></a:graphic>'
+                          '</wp:inline></w:drawing>')
+        inner = outer.xpath(".//*[local-name()='txbxContent' or local-name()='wgp']")[0]
+        for drawing in drawings:
+            inner.append(drawing if "wgp" in holder else parse_xml(f'<w:p {nsdecls("w")}><w:r/></w:p>'))
+            if "wgp" not in holder:
+                inner[-1][0].append(drawing)
+            else:
+                inner[-1].getparent().replace(inner[-1], drawing.xpath(".//pic:pic")[0])
+        paragraph._p.xpath("./w:r")[0].append(outer)
+
+    w = docx.Document()
+    boxed = w.add_paragraph()
+    boxed.add_run().add_picture(io.BytesIO(PNG), width=Inches(3))
+    boxed._p.xpath(".//wp:docPr")[0].set("descr", "a chart")
+    wrap(boxed, "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+         '<wps:wsp xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"><wps:txbx>'
+         '<w:txbxContent/></wps:txbx></wps:wsp>', "a text box")
+    grouped = w.add_paragraph()
+    grouped.add_run().add_picture(io.BytesIO(PNG + b"\0"), width=Inches(1))
+    grouped.add_run().add_picture(io.BytesIO(PNG + b"\0\0"), width=Inches(1))
+    wrap(grouped, "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+         '<wpg:wgp xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"/>', "two logos")
+    w.save(tmp_path / "n.docx")
+    assert [(f.location, f.data, f.alt) for f in documents.load(tmp_path / "n.docx").figures] == [
+        ("paragraph 1 (image 1)", PNG, "a chart"),
+        ("paragraph 2 (image 1)", PNG + b"\0", "two logos"), ("paragraph 2 (image 2)", PNG + b"\0\0", "two logos")]
+
+
+def test_alt_text_that_says_nothing_is_dropped():
+    assert documents._alt("Screenshot (1).PNG") == ""
+    assert documents._alt("A picture containing text, screenshot\n\nDescription automatically generated") == ""
+    assert documents._alt("  Repair backlog\nby quarter ") == "Repair backlog by quarter"
+
+
+def test_a_linked_picture_is_skipped(tmp_path):
+    path = deck(tmp_path, "Network results", PNG)
+    unlink(path)
+    d = documents.load(path)
+    assert [b.text for b in d.blocks] == ["Network results"] and d.figures == []
+    assert ev.load([path]).passages[0].text == "Network results"
+
+
 def test_an_unknown_format_is_an_error(tmp_path):
     (tmp_path / "x.pdf").write_text("")
     try:
@@ -74,6 +235,86 @@ def test_an_unknown_format_is_an_error(tmp_path):
         assert "unsupported format" in str(e)
     else:
         raise AssertionError
+
+
+# -- images -------------------------------------------------------------------
+
+def figure(label, data=PNG, media="image/png", alt=""):
+    return Figure(label, 1, data, media, alt)
+
+
+def transcribed(tool, kind, *lines):
+    return ModelResponse(parts=[ToolCallPart(tool, {"kind": kind, "lines": list(lines)})])
+
+
+def test_pictures_are_transcribed_into_blocks_under_their_location(tmp_path):
+    calls = []
+
+    def answer(messages, info: AgentInfo):
+        calls.append(messages[0].parts[-1].content)
+        return transcribed(info.output_tools[0].name, "chart", "Network  results", "Fare revenue, 2025: $3.1M",
+                           "Renewal: 88%", "Renewal: 88%")
+
+    d = Document(tmp_path / "d.pptx", "pptx", [Block(0, "slide 1", "Network results")],
+                 [figure("slide 1", alt="Repair backlog chart"), figure("slide 2")])
+    notes = images.transcribe(d, FunctionModel(answer))
+    assert [(b.label, b.text) for b in d.blocks[1:]] == [
+        ("slide 1 (image 1)", "Fare revenue, 2025: $3.1M"), ("slide 1 (image 1)", "Renewal: 88%"),
+        ("slide 2 (image 1)", "Network results"),
+        ("slide 2 (image 1)", "Fare revenue, 2025: $3.1M"), ("slide 2 (image 1)", "Renewal: 88%")], \
+        "a line the slide already prints as text is not added again under its picture"
+    assert len(calls) == 1, "a picture repeated across slides is read once"
+    image, text = calls[0]
+    assert isinstance(image, BinaryContent) and image.data == PNG and image.media_type == "image/png"
+    assert text.startswith("slide 1 (image 1) of d.pptx") and "Alt text: Repair backlog chart\nNetwork results" in text
+    assert notes == ["images: transcribed 2 of 2"]
+
+
+def test_pictures_the_model_cannot_read_are_skipped_with_a_note(tmp_path):
+    seen = []
+
+    def answer(messages, info: AgentInfo):
+        seen.append(messages[0].parts[-1].content[0].data)
+        if seen[-1] == PNG:
+            raise RuntimeError("boom")
+        return transcribed(info.output_tools[0].name, "none")
+
+    d = Document(tmp_path / "d.pptx", "pptx", [], [
+        figure("slide 1"), figure("slide 2", data=PNG + b"\0"), figure("slide 3", media="image/x-emf"),
+        figure("slide 4", data=b"x" * (images.MAX_IMAGE_BYTES + 1))])
+    notes = images.transcribe(d, FunctionModel(answer))
+    assert d.blocks == [] and len(seen) == 2
+    assert notes == ["images: slide 1 (image 1) not read (RuntimeError: boom)",
+                     "images: transcribed 0 of 4 (1 image/x-emf, 1 nothing to check, 1 over the size limit)"]
+
+
+def test_a_chart_image_is_checked_like_the_text_around_it(tmp_path):
+    from onus.report import as_dict
+
+    path = deck(tmp_path, "Fare revenue $2.4M", PNG)
+
+    def answer(messages, info: AgentInfo):
+        tool, content = info.output_tools[0].name, messages[0].parts[-1].content
+        if isinstance(content, list):
+            return transcribed(tool, "chart", "Fare revenue, 2026: $3.1M")
+        return ModelResponse(parts=[ToolCallPart(tool, {"claims": []})])
+
+    e = ev.load(texts=["Fare revenue $2.4M in 2026."])
+    result = check(path, e, Settings(), model=FunctionModel(answer))
+    assert [(f.code, f.label, f.snippet) for f in result.findings] == [
+        ("ONS001", "slide 1 (image 1)", "Fare revenue, 2026: $3.1M")]
+    assert result.notes == ["images: transcribed 1 of 1"]
+    assert [(c["origin"], c["status"]) for c in as_dict(result)["claims"]] == [
+        ("text", "supported"), ("image", "unsupported")]
+    for settings, why in ((Settings(llm=False), "--no-llm"), (Settings(images=False), "--no-images")):
+        result = check(path, e, settings, model=FunctionModel(answer))
+        assert result.findings == [] and result.notes == [f"images: 1 not read ({why})"]
+
+
+def test_findings_sort_by_slide_then_picture():
+    labels = ["slide 3 (image 2)", "slide 3", "slide 3 (image 1)", "slide 2"]
+    r = Result(Path("d.pptx"), [], [Finding("ONS001", "", label, "", "error") for label in labels], 0, False)
+    assert [f.label for f in r.sorted()] == ["slide 2", "slide 3", "slide 3 (image 1)", "slide 3 (image 2)"]
 
 
 # -- evidence -----------------------------------------------------------------
