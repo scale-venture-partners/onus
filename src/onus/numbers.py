@@ -18,7 +18,7 @@ count and "in 2000" as a year, and either way it is checked as both.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 MONTHS = {m: i for i, m in enumerate(
     ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
@@ -44,7 +44,7 @@ FRACTION_COUNT = {"a": 1, "one": 1, "two": 2, "three": 3, "four": 4, "nine": 9}
 # Which kinds can stand for one another when matching.
 GROUP = {"currency": "money", "amount": "money", "percent": "percent", "fraction": "percent",
          "multiple": "multiple", "count": "count", "year": "year", "quarter": "quarter", "date": "date",
-         "duration": "duration"}
+         "duration": "duration", "number": "number"}
 
 TEMPORAL = {"year", "quarter", "date", "duration"}
 
@@ -52,7 +52,7 @@ TEMPORAL = {"year", "quarter", "date", "duration"}
 @dataclass(frozen=True)
 class Quantity:
     raw: str  # as written; a range end, with the tail it shares
-    kind: str  # currency amount percent fraction multiple count year quarter date duration
+    kind: str  # currency amount percent fraction multiple count year quarter date duration number
     value: float  # normalised; for quarter and date, a sortable encoding (see below)
     tolerance: float  # half a unit of the precision it was written with
     start: int
@@ -76,6 +76,8 @@ class Quantity:
 
     def matches(self, other: Quantity) -> bool:
         """Whether `other`, in the evidence, states this one at the claim's own precision."""
+        if "number" in (self.kind, other.kind):
+            return self._magnitude(other)
         if not self.groups & other.groups:
             return False
         if self.kind == "duration" and self.unit != other.unit:
@@ -88,6 +90,19 @@ class Quantity:
             if abs(other.value / unit - round(other.value / unit)) > 1e-9:
                 slack = unit  # two thirds lands between 66% and 67%, so both state it; three quarters is just 75%
         return abs(self.value - other.value) <= slack + 1e-9
+
+    def _magnitude(self, other: Quantity) -> bool:
+        """A chart value printed with no format is a magnitude and no unit: a number of any kind at
+        that magnitude states it (2400000 is $2.4M, 0.88 is 88%), and it states any."""
+        plain, unit = (self, other) if self.kind == "number" else (other, self)
+        if unit.temporal:
+            return False
+        readings = [(unit.value, 1.0)] + ([(unit.value / 100, 0.01)] if unit.group == "percent" else [])
+        for value, scale in readings:
+            tolerance = self.tolerance * (scale if self is unit else 1.0)
+            if abs(plain.value - value) <= tolerance + 1e-9:
+                return True
+        return False
 
 
 def _half_unit(number: str, scale: float = 1.0) -> float:
@@ -168,8 +183,9 @@ def _overlaps(spans, start, end) -> bool:
     return any(start < e and s < end for s, e in spans)
 
 
-def find(text: str) -> list[Quantity]:
-    """Every quantity in `text`, longest and most specific first, no overlaps."""
+def find(text: str, plain: bool = False) -> list[Quantity]:
+    """Every quantity in `text`, longest and most specific first, no overlaps. With `plain`, a
+    number that ends a line is a chart value printed with no format: a magnitude, no unit."""
     taken = [(m.start(), m.end()) for m in NOISE.finditer(text)]
     found = []
     for kind, pattern in PATTERNS:
@@ -182,7 +198,14 @@ def find(text: str) -> list[Quantity]:
                 taken.append((m.start(), m.end()))
                 found += qs
             pos = m.end() if qs or kind != "range" else m.start() + 1  # "120% and 2-3x": try again inside
+    if plain:
+        found = [replace(q, kind="number", alt="") if q.kind in ("count", "year") and _ends_line(text, q.end) else q
+                 for q in found]
     return sorted(found, key=lambda q: q.start)
+
+
+def _ends_line(text: str, end: int) -> bool:
+    return not text[end:].split("\n", 1)[0].strip()
 
 
 DURATION_UNITS = ("day", "week", "month", "quarter", "year")

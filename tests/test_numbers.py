@@ -313,3 +313,22 @@ def test_arithmetic_needs_to_know_what_its_numbers_are():
 
 def test_sentences_split_on_semicolons_too():
     assert sentences("ARR $2.4B; NRR 118%. Backlog 1.4x\nNext") == ["ARR $2.4B;", "NRR 118%.", "Backlog 1.4x", "Next"]
+
+
+def test_a_chart_value_with_no_format_matches_any_kind_at_its_magnitude():
+    ev = find("fare revenue $2.4M, up 42%; renewal 88%; backlog 1.4x; 24 stations; two thirds east; in 2026")
+
+    def plain(text):
+        return find(text, plain=True)[-1]
+
+    assert plain("Fare revenue: 2400000").kind == "number"
+    for text, stated in (("Fare revenue: 2400000", ["$2.4M"]), ("Renewal: 0.88", ["88%"]), ("Renewal: 88", ["88%"]),
+                         ("Backlog: 1.4", ["1.4x"]), ("East: 0.67", ["two thirds"]), ("Stations: 25", []),
+                         ("Founded: 2026", [])):
+        assert [e.raw for e in ev if plain(text).matches(e)] == stated, text
+    (claim,) = find("fare revenue of $2.4M")
+    assert claim.matches(plain("Fare revenue: 2400000")), "a chart used as evidence states a text claim too"
+    (claim,) = find("renewal at 88%")
+    assert claim.matches(plain("Renewal: 0.88")) and not claim.matches(plain("Renewal: 0.6"))
+    year, value = find("Backlog, 2026 target: 1.2", plain=True)
+    assert year.kind != "number" and value.kind == "number", "only the value ends the line; a category's year is a year"

@@ -1,12 +1,12 @@
 """Read the document being checked into blocks: one per text frame,
-paragraph, or table cell, each with a location a reader can find. Pictures
-are collected alongside, for the model to transcribe (images.py)."""
+paragraph, table cell or chart value, each with a location a reader can find.
+Pictures are collected alongside, for the model to transcribe (images.py)."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # A block that is only a short number is a page number or a list marker.
@@ -21,7 +21,8 @@ class Block:
     id: int
     label: str  # "slide 3", "paragraph 12", "line 40"
     text: str
-    origin: str = "text"  # "text" | "image": a transcription is only as good as the model's reading
+    origin: str = "text"  # "text" | "chart" | "image": a transcription is only as good as the model's reading
+    plain: bool = False  # ends in a chart value printed with no format: a magnitude, no unit
 
 
 @dataclass(frozen=True)
@@ -59,16 +60,17 @@ class Document:
     def text(self) -> str:
         return "\n".join(b.text for b in self.blocks)
 
-    def extend(self, items: Iterable[tuple[str, str]], origin: str = "text") -> None:
+    def extend(self, items: Iterable[Block]) -> None:
+        """Add blocks, numbered on from the last, with their text normalised and a repeat dropped."""
         seen = {(b.label, b.text) for b in self.blocks}
-        for label, text in items:
-            text = " ".join(text.split())
+        for block in items:
+            text = " ".join(block.text.split())
             if not text or _BARE_NUMBER.match(text):
                 continue
-            if (label, text) in seen:  # a slide repeats its eyebrow, a table its header
+            if (block.label, text) in seen:  # a slide repeats its eyebrow, a table its header
                 continue
-            seen.add((label, text))
-            self.blocks.append(Block(len(self.blocks), label, text, origin))
+            seen.add((block.label, text))
+            self.blocks.append(replace(block, id=len(self.blocks), text=text))
 
 
 def _shapes(shapes):
@@ -81,15 +83,22 @@ def _shapes(shapes):
             yield shape
 
 
-def _pptx(path: Path) -> tuple[list[tuple[str, str]], list[Figure]]:
+def _pptx(path: Path) -> tuple[list[Block], list[Figure]]:
     from pptx import Presentation
     from pptx.shapes.picture import Picture
 
-    texts: list[tuple[str, str]] = []
+    from onus import charts
+
+    texts: list[Block] = []
     figures: list[Figure] = []
     for n, slide in enumerate(Presentation(str(path)).slides, start=1):
-        pictures = 0
+        pictures = graphs = 0
         for shape in _shapes(slide.shapes):
+            if getattr(shape, "has_chart", False) and shape.has_chart:
+                graphs += 1
+                where = f"slide {n} (chart {graphs})"
+                texts += [Block(0, where, text, "chart", plain) for _, text, plain in charts.blocks(shape.chart, where)]
+                continue
             if isinstance(shape, Picture):
                 pictures += 1
                 # python-pptx's Image wrapper decodes the bytes to name their type; the part already knows it
@@ -110,19 +119,19 @@ def _pptx(path: Path) -> tuple[list[tuple[str, str]], list[Figure]]:
                 frames = [c.text_frame for row in shape.table.rows for c in row.cells]
             for frame in frames:
                 for paragraph in frame.text.split("\n"):
-                    texts.append((f"slide {n}", paragraph))
+                    texts.append(Block(0, f"slide {n}", paragraph))
     return texts, figures
 
 
-def _docx(path: Path) -> tuple[list[tuple[str, str]], list[Figure]]:
+def _docx(path: Path) -> tuple[list[Block], list[Figure]]:
     import docx
 
     d = docx.Document(str(path))
-    texts: list[tuple[str, str]] = []
+    texts: list[Block] = []
     figures: list[Figure] = []
 
     def pictures(label: str, scope) -> None:
-        for n, pic in enumerate(scope.xpath(".//pic:pic"), start=1):
+        for n, pic in enumerate(scope.xpath(".//pic:pic[not(ancestor::*[local-name()='Fallback'])]"), start=1):
             rids = pic.xpath("./pic:blipFill/a:blip/@r:embed")
             part = d.part.related_parts.get(rids[0]) if rids else None
             if part is None:  # a linked picture has no bytes in the file
@@ -133,18 +142,18 @@ def _docx(path: Path) -> tuple[list[tuple[str, str]], list[Figure]]:
             figures.append(Figure(label, n, part.blob, _media(part.content_type), alt))
 
     for i, p in enumerate(d.paragraphs, start=1):
-        texts.append((f"paragraph {i}", p.text))
+        texts.append(Block(0, f"paragraph {i}", p.text))
         pictures(f"paragraph {i}", p._p)
     for t, table in enumerate(d.tables, start=1):
         for row in table.rows:
             for cell in row.cells:
-                texts.append((f"table {t}", cell.text))
+                texts.append(Block(0, f"table {t}", cell.text))
         pictures(f"table {t}", table._tbl)  # once per table: a merged cell is listed per column
     return texts, figures
 
 
-def _text(path: Path) -> tuple[list[tuple[str, str]], list[Figure]]:
-    return [(f"line {i}", line) for i, line in enumerate(path.read_text().splitlines(), start=1)], []
+def _text(path: Path) -> tuple[list[Block], list[Figure]]:
+    return [Block(0, f"line {i}", line) for i, line in enumerate(path.read_text().splitlines(), start=1)], []
 
 
 READERS = {".pptx": _pptx, ".docx": _docx, ".md": _text, ".txt": _text, ".markdown": _text}

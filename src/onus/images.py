@@ -25,7 +25,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from onus.documents import Document, Figure
+from onus.documents import Block, Document, Figure
 
 MEDIA_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 MAX_IMAGE_BYTES = 3_750_000  # the API's 5 MB per image, before base64 adds a third
@@ -113,7 +113,8 @@ def transcribe(doc: Document, model, concurrency: int = 8) -> list[str]:
                 read += len(copies)
                 for f in copies:
                     printed = {_norm(b.text) for b in doc.blocks if b.label == f.label}
-                    doc.extend(((f.location, line) for line in result.lines if _norm(line) not in printed), "image")
+                    lines = [line for line in result.lines if _norm(line) not in printed]
+                    doc.extend(Block(0, f.location, line, "image") for line in lines)
     detail = ", ".join(f"{n} {r}" for r, n in sorted(skipped.items(), key=lambda x: (-x[1], x[0])))
     notes.append(f"images: transcribed {read} of {len(doc.figures)}" + (f" ({detail})" if detail else ""))
     return notes

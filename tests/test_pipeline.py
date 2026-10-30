@@ -213,6 +213,32 @@ def test_word_pictures_in_text_boxes_and_groups_are_read_once_each(tmp_path):
         ("paragraph 2 (image 1)", PNG + b"\0", "two logos"), ("paragraph 2 (image 2)", PNG + b"\0\0", "two logos")]
 
 
+def test_a_word_text_box_with_a_fallback_branch_is_read_once(tmp_path):
+    import copy
+
+    import docx
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls, qn
+    from pptx.util import Inches
+
+    w = docx.Document()
+    p = w.add_paragraph()
+    p.add_run().add_picture(io.BytesIO(PNG), width=Inches(3))
+    drawing = p._p.xpath(".//w:drawing")[0]
+    holder = parse_xml(
+        f'<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" {nsdecls("w")}'
+        ' xmlns:v="urn:schemas-microsoft-com:vml"><mc:Choice Requires="wps"><w:txbxContent/></mc:Choice>'
+        '<mc:Fallback><w:pict><v:shape><v:textbox><w:txbxContent/></v:textbox></v:shape></w:pict></mc:Fallback>'
+        '</mc:AlternateContent>')
+    for content in holder.iter(qn("w:txbxContent")):
+        content.append(parse_xml(f'<w:p {nsdecls("w")}><w:r/></w:p>'))
+        content[0][0].append(copy.deepcopy(drawing))
+    drawing.getparent().replace(drawing, holder)
+    w.save(tmp_path / "b.docx")
+    figures = documents.load(tmp_path / "b.docx").figures
+    assert [(f.location, f.data) for f in figures] == [("paragraph 1 (image 1)", PNG)]
+
+
 def test_alt_text_that_says_nothing_is_dropped():
     assert documents._alt("Screenshot (1).PNG") == ""
     assert documents._alt("A picture containing text, screenshot\n\nDescription automatically generated") == ""

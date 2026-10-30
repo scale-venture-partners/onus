@@ -75,6 +75,17 @@
       ],
       "clean": ["2.1x", "1.4x", "33%", "$2.4M", "42%", "88%",
                 "Two thirds of new docks are going to the east bank."]
+    },
+    {
+      "name": "deck: native charts",
+      "document": "fixtures/bike_share_native_charts.pptx",
+      "evidence": ["fixtures/bike_share_facts.md"],
+      "expect": [
+        {"code": "ONS001", "number": "1.2x", "text": "Backlog, 2026 target: 1.2x"},
+        {"code": "ONS001", "number": "3100000", "text": "Fare revenue, 2026 target: 3100000"}
+      ],
+      "clean": ["Backlog, Before: 2.1x", "Backlog, Now: 1.4x", "Fare revenue, This year: 2400000",
+                "Members, Renewed: 88%", "Two thirds of new docks are going to the east bank."]
     }
   ]
 }

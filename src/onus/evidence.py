@@ -73,15 +73,16 @@ class Passage:
     kind: str = "prose"  # "prose" | "code" | "table"
     strict: bool = False  # read from a directory: a number needs context to count
     header: str = ""      # a table's first line, context for every row
+    plain: bool = False   # a chart's values, one per line, printed with no format
     quantities: list[numbers.Quantity] = field(default_factory=list)
     derived: list[numbers.Quantity] = field(default_factory=list)
 
     def __post_init__(self):
-        self.quantities = numbers.find(self.text)
+        self.quantities = numbers.find(self.text, self.plain)
         if self.kind == "code":
             return  # pairs of numbers in code license no arithmetic
         for sentence in numbers.sentences(self.text):
-            self.derived += numbers.derived(numbers.find(sentence))
+            self.derived += numbers.derived(numbers.find(sentence, self.plain))
 
     @cached_property
     def quote_key(self) -> str:
@@ -97,7 +98,7 @@ class Passage:
 
     def _context(self, quantity: numbers.Quantity) -> str:
         text, a, b = self.text, quantity.start, quantity.end
-        if self.kind in ("code", "table"):
+        if self.kind in ("code", "table") or self.plain:
             start = text.rfind("\n", 0, a) + 1
             end = text.find("\n", b)
             return f"{self.header} {text[start:end if end >= 0 else len(text)]}"
@@ -111,10 +112,10 @@ class Evidence:
     passages: list[Passage] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
-    def add(self, source: str, text: str, kind: str = "prose", strict: bool = False) -> None:
+    def add(self, source: str, text: str, kind: str = "prose", strict: bool = False, plain: bool = False) -> None:
         header = text.split("\n", 1)[0] if kind == "table" else ""
         for i, chunk in enumerate(_chunks(text)):
-            self.passages.append(Passage(f"{source}#{i + 1}" if i else source, chunk, kind, strict, header))
+            self.passages.append(Passage(f"{source}#{i + 1}" if i else source, chunk, kind, strict, header, plain))
         self.__dict__.pop("_index", None)
 
     def __bool__(self) -> bool:
@@ -298,7 +299,10 @@ def _load_file(evidence: Evidence, path: Path, source: str, exclude_tools, read,
         add(source, "\n\n".join(_strings(json.loads(read()))))
     elif suffix in DOCUMENT_SUFFIXES:
         doc = documents.load(path)
-        add(source, "\n\n".join(b.text for b in doc.blocks))
+        add(source, "\n\n".join(b.text for b in doc.blocks if b.origin != "chart"))
+        for label in dict.fromkeys(b.label for b in doc.blocks if b.origin == "chart"):  # one passage per chart
+            lines = [b.text for b in doc.blocks if b.origin == "chart" and b.label == label]
+            evidence.add(f"{source}:{label}", "\n".join(lines), "prose", strict, plain=True)
     else:
         add(source, read(), "code" if suffix in CODE_SUFFIXES else "table" if suffix in TABLE_SUFFIXES else "prose")
 
