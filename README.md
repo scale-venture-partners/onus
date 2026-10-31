@@ -45,7 +45,8 @@ onus is a small test pipeline. The claims are the test cases, the evidence is
 the fixture, and the checks are the assertions.
 
 1. **Read** the document into blocks: text frames per slide, paragraphs, table
-   cells. A deck's pictures are transcribed by the model (see [Images](#images)).
+   cells, and a native chart's values (see [Charts](#charts)). A deck's pictures
+   are transcribed by the model (see [Images](#images)).
 2. **Extract claims** from two sources, merged:
    - a deterministic **scan** finds every quantity: money (`$2.4B`, `2.4
      billion`, `$2,400M` are all the same value), percentages, "two thirds",
@@ -120,6 +121,18 @@ under this one none did, and the one true number still passed. On the deck's
 42 real numbered claims, one, a chart label "Build 6", went from "supported"
 (by "drifted on six axes") to flagged, which was correct.
 
+## Charts
+
+A native chart object carries its numbers exactly, so it is read with no
+model: one block per category and value, printed as PowerPoint would from
+the chart's number format, plus its title and any custom data label, under
+`slide 2 (chart 1)`. A date on the category axis is written as a date, a
+negative value with "minus". A value left in "General" format is a bare
+magnitude, so tier 1 matches it against evidence of any kind at that
+magnitude: `2400000` is supported by `$2.4M`, `0.88` by `88%`. A deck used
+as evidence contributes each chart as a passage. A scatter or bubble series
+contributes its y values only, and charts in Word documents are not read.
+
 ## Images
 
 A picture (a chart exported from Canva or Google Slides, a KPI tile, a
@@ -137,9 +150,9 @@ its size. PNG, JPEG, GIF and WebP are sent, other types and oversized files
 are skipped with a note, and a repeated picture is read once. `--no-images`
 (`images = false` in config) or `--no-llm` leaves pictures unread. In Word
 files, pictures in paragraphs and table cells are read; headers, footers and
-VML are not. The JSON report's `origin` field marks claims that came from a
-transcription. Native chart objects and pictures inside evidence documents
-are not read yet.
+VML are not. The JSON report's `origin` field says whether a claim came from
+text, a chart or a transcription. Pictures inside evidence documents are not
+read.
 
 ## Rules
 
@@ -206,10 +219,12 @@ results vary by model and run.
   doesn't know (`12-15 bikes`, `2-3 kW`) leaves the high end unchecked.
 - **Claims with a number and a qualitative part** ("118% NRR tells us expansion
   is structural") are settled by their number.
-- **A chart is read as a picture, or not at all.** A native chart object
-  contributes nothing yet, and a picture of one contributes only what is
-  printed in it, as the model reads it: a value it cannot make out, or a
-  number it misreads, is a miss or a false finding in the model tier.
+- **A native chart's values are its data, not what a viewer sees.** Every
+  value in its series is checked, labelled on the chart or not, and an axis
+  title or display unit ("Millions") is not read. A chart in a picture
+  contributes only what is printed in it, as the model reads it: a value it
+  cannot make out, or a number it misreads, is a miss or a false finding in
+  the model tier.
 
 ## Configuration
 

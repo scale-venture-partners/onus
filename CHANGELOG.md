@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A deck's native charts are read, with no model: one block per category and
+  value, written as PowerPoint prints it from the chart's number format, plus
+  the title and any custom data label, under "slide 3 (chart 1)". A value in
+  "General" format is a bare magnitude, and tier 1 matches it against evidence
+  of any kind at that magnitude (2400000 by $2.4M, 0.88 by 88%). A deck used
+  as evidence contributes each chart as a passage of its own.
+
 - A document's pictures are read. The model transcribes what a chart, table,
   KPI tile or screenshot prints, one statement per line, and the lines are
   checked like the slide's text, under the picture's location ("slide 3
