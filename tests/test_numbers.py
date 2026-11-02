@@ -332,3 +332,14 @@ def test_a_chart_value_with_no_format_matches_any_kind_at_its_magnitude():
     assert claim.matches(plain("Renewal: 0.88")) and not claim.matches(plain("Renewal: 0.6"))
     year, value = find("Backlog, 2026 target: 1.2", plain=True)
     assert year.kind != "number" and value.kind == "number", "only the value ends the line; a category's year is a year"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("The count was 17.", [("17", "count")]),
+    ("Docks: 24.", [("24", "count")]),
+    ("The index closed at 48.7.", [("48.7", "count")]),
+    ("Costs rose to 17.5. Then they fell.", [("17.5", "count")]),
+    ("Version 1.2.3 shipped.", []),
+])
+def test_a_number_that_ends_a_sentence_is_read_but_a_version_is_not(text, expected):
+    assert [(q.raw, q.kind) for q in find(text)] == expected
