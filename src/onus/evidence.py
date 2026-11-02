@@ -81,6 +81,7 @@ class Passage:
         self.quantities = numbers.find(self.text, self.plain)
         if self.kind == "code":
             return  # pairs of numbers in code license no arithmetic
+        self.quantities += numbers.scaled(self.text, self.quantities)
         for sentence in numbers.sentences(self.text):
             self.derived += numbers.derived(numbers.find(sentence, self.plain))
 
