@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A chart value in General format is written with 15 significant digits, as
+  PowerPoint prints it: 96.2 is "96.2", not "96.200000000000003", which held the
+  evidence to 15-decimal precision and so never matched.
+
 - A deck's native charts are read, with no model: one block per category and
   value, written as PowerPoint prints it from the chart's number format, plus
   the title and any custom data label, under "slide 3 (chart 1)". A value in

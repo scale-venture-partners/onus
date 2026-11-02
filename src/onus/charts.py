@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
+from decimal import Decimal
 
 _SPLIT = re.compile(r";")
 _LITERALS = re.compile(r'"[^"]*"|\\.|\[[^\]]*\]')
@@ -105,8 +106,9 @@ def render(value: float, fmt: str | None) -> str:
 
 
 def _plain(value: float) -> str:
-    value = float(value)
-    return f"{value:.0f}" if value.is_integer() else f"{value:.15f}".rstrip("0").rstrip(".")
+    """15 significant digits, as General prints them: 96.2 is "96.2", not its binary expansion."""
+    text = format(Decimal(f"{float(value):.15g}"), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
 
 
 def _formatted(value: float, section: str) -> str:

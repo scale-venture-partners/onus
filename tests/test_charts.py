@@ -147,6 +147,10 @@ def test_dates_and_numbers_on_the_category_axis_are_written_as_printed(tmp_path)
     (2.1, "[Red]_(0.0_)", "2.1"),
     (2400000, "General", "2400000"),
     (0.88, None, "0.88"),
+    (96.2, None, "96.2"),
+    (1234.5678, "General", "1234.5678"),
+    (46.7, "General", "46.7"),
+    (2.4e15, None, "2400000000000000"),
 ])
 def test_number_formats_render_as_powerpoint_prints_them(value, fmt, printed):
     assert charts.render(value, fmt) == printed
@@ -169,3 +173,20 @@ def test_a_model_span_cut_short_of_the_value_keeps_the_category_s_year(tmp_path)
                                                                subject="")])
     assert [(q.raw, q.kind) for q in whole.quantities] == [("2024", "year"), ("1200", "number")]
     assert numbers.find("Margin: minus 1.5", plain=True)[0].value == 1.5
+
+
+def test_a_chart_value_with_no_format_matches_the_figure_the_evidence_states(tmp_path):
+    from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.util import Inches
+
+    prs = Presentation()
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    data = CategoryChartData()
+    data.categories = ["Now"]
+    data.add_series("Index", (48.7,))
+    s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(1), Inches(1), Inches(6), Inches(4), data)
+    prs.save(tmp_path / "d.pptx")
+    evidence = ev.load(texts=["The index closed at 48.7 today."])
+    assert check(tmp_path / "d.pptx", evidence, Settings(llm=False)).findings == []
