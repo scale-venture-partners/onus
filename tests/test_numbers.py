@@ -362,3 +362,13 @@ def test_a_dollar_sign_in_its_own_cell_marks_the_amount_in_the_next():
 def test_a_later_note_replaces_the_scale_and_a_table_with_no_note_has_none():
     text = "(in thousands)\nA | $5 |\n(in billions)\nB | $7 |\n\nC | $9 |\n"
     assert [s.value for s in numbers.scaled(text, numbers.find(text))] == [5e3, 7e9]
+
+@pytest.mark.parametrize("text, expected", [
+    ("The count was 17.", [("17", "count")]),
+    ("Docks: 24.", [("24", "count")]),
+    ("The index closed at 48.7.", [("48.7", "count")]),
+    ("Costs rose to 17.5. Then they fell.", [("17.5", "count")]),
+    ("Version 1.2.3 shipped.", []),
+])
+def test_a_number_that_ends_a_sentence_is_read_but_a_version_is_not(text, expected):
+    assert [(q.raw, q.kind) for q in find(text)] == expected

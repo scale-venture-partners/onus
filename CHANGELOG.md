@@ -8,6 +8,10 @@
   blank line ends the table. A `$` in a cell of its own, as SEC filings print
   it, marks the amount in the next cell.
 
+- A bare number that ends a sentence ("The count was 17.") is read as a count.
+  A full stop after it hid it, so neither a document's nor the evidence's was
+  checked. "1.2.3" is still no number.
+
 - A deck's native charts are read, with no model: one block per category and
   value, written as PowerPoint prints it from the chart's number format, plus
   the title and any custom data label, under "slide 3 (chart 1)". A value in
