@@ -361,6 +361,35 @@ def derived(quantities: list[Quantity]) -> list[Quantity]:
     return out
 
 
+# "($ in millions)", "in thousands": a table states its unit once, and its rows print bare dollars.
+UNIT_NOTE = re.compile(r"\bin\s+(thousand|million|billion)s\b", re.I)
+# A filing's HTML puts the dollar sign in a cell of its own: "Revenue | $ | 96,221".
+SPLIT_DOLLAR = re.compile(rf"([$€£])\s*\|\s*({NUM})(?![\w%]|\.\d|,\d)")
+NAMES_ITS_SCALE = re.compile(rf"(?:{SCALE_WORDS})$", re.I)
+
+
+def scaled(text: str, quantities: list[Quantity]) -> list[Quantity]:
+    """The dollar amounts of a table under a unit note, read at that scale as well. They stay
+    readable unscaled too: a per-share column under "($ in millions, except per share)" is dollars.
+    A blank line ends the table; an amount that names its own scale ("$4.2 billion") is left alone."""
+    out, scale, pos = [], 1.0, 0
+    for line in text.split("\n"):
+        start, pos = pos, pos + len(line) + 1
+        if not line.strip():
+            scale = 1.0
+        if note := UNIT_NOTE.search(line):
+            scale = SCALE[note.group(1).lower()]
+        if scale == 1.0:
+            continue
+        found = [q for q in quantities if start <= q.start < pos - 1 and q.kind == "currency"
+                 and not NAMES_ITS_SCALE.search(q.raw)]
+        found += [Quantity(f"{m.group(1)}{m.group(2)}", "currency", _num(m.group(2)), _half_unit(m.group(2)),
+                           start + m.start(), start + m.end(), m.group(1))
+                  for m in SPLIT_DOLLAR.finditer(line)]
+        out += [replace(q, value=q.value * scale, tolerance=q.tolerance * scale) for q in found]
+    return out
+
+
 SENTENCE = re.compile(r"(?<=[.!?;])\s+|\n+")
 
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A table under a unit note ("($ in millions)", "in thousands") states its
+  dollar amounts at that scale as well, so `$4,210` in the evidence supports a
+  claim of `$4.2B`. The unscaled reading stays, for a per-share column, and a
+  blank line ends the table. A `$` in a cell of its own, as SEC filings print
+  it, marks the amount in the next cell.
+
 - A bare number that ends a sentence ("The count was 17.") is read as a count.
   A full stop after it hid it, so neither a document's nor the evidence's was
   checked. "1.2.3" is still no number.

@@ -2,6 +2,7 @@
 
 import pytest
 
+from onus import numbers
 from onus.numbers import derived, find, sentences
 
 
@@ -333,6 +334,34 @@ def test_a_chart_value_with_no_format_matches_any_kind_at_its_magnitude():
     year, value = find("Backlog, 2026 target: 1.2", plain=True)
     assert year.kind != "number" and value.kind == "number", "only the value ends the line; a category's year is a year"
 
+
+TABLE = ("Q2 results\n($ in millions, except per share)\nRevenue | $4,210 | $3,980\nEPS | $2.46 | $2.39\n"
+         "Shares | 1,720 | 1,710\n\nOutside the table we spent $5,000 on signs.\n")
+
+
+def test_a_table_headed_with_a_unit_also_states_its_dollar_amounts_at_that_scale():
+    q = numbers.find(TABLE)
+    scaled = {s.raw: s.value for s in numbers.scaled(TABLE, q)}
+    assert scaled["$4,210"] == 4.21e9 and scaled["$2.46"] == 2.46e6, \
+        "every $ amount under the note; per-share columns stay readable unscaled as well"
+    assert "$5,000" not in scaled and "1,720" not in scaled, \
+        "a blank line ends the table; a bare count is no dollar amount"
+    assert next(s for s in numbers.scaled(TABLE, q) if s.raw == "$4,210").tolerance == 0.5e6
+
+
+def test_an_amount_that_names_its_own_scale_is_not_scaled_again():
+    text = "($ in millions)\nRevenue | $4.2 billion | $4,210\n"
+    assert [s.raw for s in numbers.scaled(text, numbers.find(text))] == ["$4,210"]
+
+
+def test_a_dollar_sign_in_its_own_cell_marks_the_amount_in_the_next():
+    text = "(in billions)\nRevenue | $ | 96.2 | $ | 81.6 |\nHeadcount | 4,100 |\n"
+    assert sorted(s.value for s in numbers.scaled(text, numbers.find(text))) == [81.6e9, 96.2e9]
+
+
+def test_a_later_note_replaces_the_scale_and_a_table_with_no_note_has_none():
+    text = "(in thousands)\nA | $5 |\n(in billions)\nB | $7 |\n\nC | $9 |\n"
+    assert [s.value for s in numbers.scaled(text, numbers.find(text))] == [5e3, 7e9]
 
 @pytest.mark.parametrize("text, expected", [
     ("The count was 17.", [("17", "count")]),

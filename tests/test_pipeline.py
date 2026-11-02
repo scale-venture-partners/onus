@@ -547,3 +547,10 @@ def test_word_documents_read_paragraphs_and_tables_and_serve_as_evidence(tmp_pat
         ("paragraph 1", "ARR reached $2.4B."), ("table 1", "NRR"), ("table 1", "118%")]
     e = ev.load([tmp_path / "memo.docx"])
     assert "118%" in e.passages[0].text and e.passages[0].source == "memo.docx"
+
+
+def test_a_dollar_figure_in_a_table_under_a_unit_note_supports_a_claim_in_that_unit(tmp_path):
+    e = ev.load(texts=["Q2 results\n($ in millions)\nNet income | $4,210 | $3,980\n"])
+    (tmp_path / "memo.md").write_text("Net income was $4.2B.\n\nNet income was $4.9B.\n")
+    result = check(tmp_path / "memo.md", e, Settings(llm=False))
+    assert [(f.code, f.message) for f in result.findings] == [("ONS001", "$4.9B: no number like it in the evidence")]
