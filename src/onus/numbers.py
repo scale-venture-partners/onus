@@ -172,7 +172,7 @@ PATTERNS = [
                             re.I)),
     ("amount", re.compile(rf"(?<![\w.$€£])({NUM})\s?({AMOUNT_SCALE_WORDS})\b", re.I)),
     ("year", re.compile(r"(?<![\w.,$])(19[5-9]\d|20\d\d)(?![\w%]|\.\d|,\d)")),
-    ("count", re.compile(rf"(?<![\w.,$€£#@/-])({NUM})(?![\w%×.]|\.\d|,\d)|\b({WORDNUM})\b", re.I)),
+    ("count", re.compile(rf"(?<![\w.,$€£#@/-])({NUM})(?![\w%×]|\.[\w\d]|,\d)|\b({WORDNUM})\b", re.I)),
 ]
 
 # Text no claim lives in: addresses, links, handles.
