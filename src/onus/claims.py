@@ -94,11 +94,12 @@ def scan_claims(doc: Document) -> list[Claim]:
     claims: list[Claim] = []
     for block in doc.blocks:
         by_sentence: dict[str, list] = {}
-        for q in numbers.find(block.text, block.plain):
+        for q in numbers.find(block.text, block.plain, block.unit):
             by_sentence.setdefault(_sentence_around(block.text, q.start, q.end), []).append(q)
         for sentence, qs in by_sentence.items():
             kind = "temporal" if all(q.temporal for q in qs) else "quantitative"
-            claims.append(Claim(len(claims), block, sentence, kind, "", "scan", numbers.find(sentence, block.plain)))
+            found = numbers.find(sentence, block.plain, block.unit)
+            claims.append(Claim(len(claims), block, sentence, kind, "", "scan", found))
     return claims
 
 
@@ -126,14 +127,15 @@ def merge(doc: Document, extracted: list[ExtractedClaim]) -> tuple[list[Claim], 
         span = " ".join(block.text.split())[start:start + len(" ".join(e.text.split()))]
         covered.setdefault(block.id, []).append((start, start + len(span)))
         plain = block.plain and " ".join(block.text.split()).endswith(span)
-        claims.append(Claim(len(claims), block, span, e.kind, e.subject, "model", numbers.find(span, plain)))
+        found = numbers.find(span, plain, block.unit)
+        claims.append(Claim(len(claims), block, span, e.kind, e.subject, "model", found))
 
     missed = []
     for block in doc.blocks:
         spans = covered.get(block.id, [])
         text = " ".join(block.text.split())
         by_sentence: dict[str, list] = {}
-        for q in numbers.find(text, block.plain):
+        for q in numbers.find(text, block.plain, block.unit):
             if not any(s <= q.start and q.end <= e for s, e in spans):
                 by_sentence.setdefault(_sentence_around(text, q.start, q.end), []).append(q)
         for sentence, qs in by_sentence.items():  # one claim per sentence, however many numbers it holds

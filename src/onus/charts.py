@@ -3,8 +3,10 @@ tier 1 checks them with no model. A chart object carries its numbers exactly;
 each is written the way PowerPoint prints it, from the number format the
 series, its data labels or the value axis declare ("$2.4M", "88%", "1.4x").
 A value with no format prints as a bare magnitude ("2400000"), and the block
-says so, so that tier 1 matches it against evidence of any kind. A scatter or
-bubble series contributes its y values only."""
+says so, so that tier 1 matches it against evidence of any kind; where the
+series name, value-axis title or chart title names a currency and a scale
+("Revenue ($B)"), the block says that too. A scatter or bubble series
+contributes its y values only."""
 
 from __future__ import annotations
 
@@ -12,29 +14,50 @@ import re
 from datetime import date, timedelta
 from decimal import Decimal
 
+from onus import numbers
+
 _SPLIT = re.compile(r";")
 _LITERALS = re.compile(r'"[^"]*"|\\.|\[[^\]]*\]')
 _EPOCH = date(1899, 12, 30)
 
 
-def blocks(chart, label: str) -> list[tuple[str, str, bool]]:
+def blocks(chart, label: str) -> list[tuple[str, str, bool, str]]:
+    """(label, text, plain, unit) per block: `plain` for a value printed with no format, and
+    `unit` the currency and scale its chart names for it, as written ("$B")."""
     out = []
+    title = chart.chart_title.text_frame.text if chart.has_title else ""
     if chart.has_title:
-        out.append((label, chart.chart_title.text_frame.text, False))
+        out.append((label, title, False, ""))
     dated = bool(chart._chartSpace.xpath(".//c:dateAx"))
     for plot in chart.plots:
         for series in plot.series:
             fmt = _format(chart, plot, series)
             keys = _keys(plot, series, dated)
+            unit = _unit(series.name, _axis_title(chart), title) if _general(fmt) else ""
             for i, value in enumerate(series.values):
                 if value is None:
                     continue
                 head = ", ".join(part for part in (series.name, keys[i] if i < len(keys) else "") if part)
-                out.append((label, f"{head}: {render(value, fmt)}" if head else render(value, fmt), _general(fmt)))
+                text = f"{head}: {render(value, fmt)}" if head else render(value, fmt)
+                out.append((label, text, _general(fmt), unit))
                 custom = _custom_label(series, i)
                 if custom:
-                    out.append((label, custom, False))
+                    out.append((label, custom, False, ""))
     return out
+
+
+def _unit(*names: str) -> str:
+    """The first currency-and-scale the names state, most specific first: General prints 96.2,
+    and a series named "Revenue ($B)" says that is $96.2B."""
+    return next((m.group(0) for name in names if (m := numbers.STATED_UNIT.search(name or ""))), "")
+
+
+def _axis_title(chart) -> str:
+    try:
+        axis = chart.value_axis
+    except ValueError:  # a pie has no value axis
+        return ""
+    return axis.axis_title.text_frame.text if axis.has_title else ""
 
 
 def _keys(plot, series, dated: bool) -> list[str]:

@@ -138,7 +138,10 @@ the chart's number format, plus its title and any custom data label, under
 `slide 2 (chart 1)`. A date on the category axis is written as a date, a
 negative value with "minus". A value left in "General" format is a bare
 magnitude, so tier 1 matches it against evidence of any kind at that
-magnitude: `2400000` is supported by `$2.4M`, `0.88` by `88%`. A deck used
+magnitude: `2400000` is supported by `$2.4M`, `0.88` by `88%`. Where the
+series name, value-axis title or chart title names a currency and a scale
+(`($B)`, `in $ millions`, `USD M`), the value is that money as well: `96.2`
+under "Revenue ($B)" is supported by `$96.2 billion` or `$96,221M`. A deck used
 as evidence contributes each chart as a passage. A scatter or bubble series
 contributes its y values only, and charts in Word documents are not read.
 
@@ -229,8 +232,9 @@ results vary by model and run.
 - **Claims with a number and a qualitative part** ("118% NRR tells us expansion
   is structural") are settled by their number.
 - **A native chart's values are its data, not what a viewer sees.** Every
-  value in its series is checked, labelled on the chart or not, and an axis
-  title or display unit ("Millions") is not read. A chart in a picture
+  value in its series is checked, labelled on the chart or not. A title is read
+  for its unit only when it names a currency and a scale (`($B)`, `USD M`), and
+  an axis display unit ("Millions") is not read. A chart in a picture
   contributes only what is printed in it, as the model reads it: a value it
   cannot make out, or a number it misreads, is a miss or a false finding in
   the model tier.

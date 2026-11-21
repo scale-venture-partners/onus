@@ -86,6 +86,16 @@
       ],
       "clean": ["Backlog, Before: 2.1x", "Backlog, Now: 1.4x", "Fare revenue, This year: 2400000",
                 "Members, Renewed: 88%", "Two thirds of new docks are going to the east bank."]
+    },
+    {
+      "name": "deck: charts that name their unit",
+      "document": "fixtures/bike_share_unit_charts.pptx",
+      "evidence": ["fixtures/bike_share_facts.md"],
+      "expect": [
+        {"code": "ONS001", "number": "3.1", "text": "Fare revenue ($M), 2026 target: 3.1"},
+        {"code": "ONS001", "number": "0.8", "text": "Fares, Night shuttle: 0.8"}
+      ],
+      "clean": ["Fare revenue ($M), This year: 2.4", "Fares, This year: 2.4"]
     }
   ]
 }

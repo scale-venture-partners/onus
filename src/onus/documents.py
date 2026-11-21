@@ -23,6 +23,7 @@ class Block:
     text: str
     origin: str = "text"  # "text" | "chart" | "image": a transcription is only as good as the model's reading
     plain: bool = False  # ends in a chart value printed with no format: a magnitude, no unit
+    unit: str = ""  # the currency and scale that value's chart names ("$B"), if it names one
 
 
 @dataclass(frozen=True)
@@ -97,7 +98,8 @@ def _pptx(path: Path) -> tuple[list[Block], list[Figure]]:
             if getattr(shape, "has_chart", False) and shape.has_chart:
                 graphs += 1
                 where = f"slide {n} (chart {graphs})"
-                texts += [Block(0, where, text, "chart", plain) for _, text, plain in charts.blocks(shape.chart, where)]
+                texts += [Block(0, where, text, "chart", plain, unit)
+                          for _, text, plain, unit in charts.blocks(shape.chart, where)]
                 continue
             if isinstance(shape, Picture):
                 pictures += 1

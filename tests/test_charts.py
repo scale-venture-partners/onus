@@ -190,3 +190,64 @@ def test_a_chart_value_with_no_format_matches_the_figure_the_evidence_states(tmp
     prs.save(tmp_path / "d.pptx")
     evidence = ev.load(texts=["The index closed at 48.7 today."])
     assert check(tmp_path / "d.pptx", evidence, Settings(llm=False)).findings == []
+
+
+def unit_deck(tmp_path):
+    from pptx import Presentation
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.util import Inches
+
+    prs = Presentation()
+    s = prs.slides.add_slide(prs.slide_layouts[6])
+    box = (Inches(1), Inches(1), Inches(6), Inches(4))
+    data = CategoryChartData()
+    data.categories = ["Q3", "Q4"]
+    data.add_series("Quarterly revenue ($B)", (96.2, 98.1))
+    s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, *box, data)
+    data = CategoryChartData()
+    data.categories = ["Q3"]
+    data.add_series("Bookings", (310,))
+    chart = s.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, *box, data).chart
+    chart.value_axis.has_title = True
+    chart.value_axis.axis_title.text_frame.text = "USD M"
+    prs.save(tmp_path / "u.pptx")
+    return tmp_path / "u.pptx"
+
+
+def test_a_chart_that_names_its_unit_matches_the_figure_stated_with_that_unit(tmp_path):
+    d = documents.load(unit_deck(tmp_path))
+    assert [(b.text, b.plain, b.unit) for b in d.blocks] == [
+        ("Quarterly revenue ($B), Q3: 96.2", True, "$B"),
+        ("Quarterly revenue ($B), Q4: 98.1", True, "$B"),
+        ("Bookings, Q3: 310", True, "USD M"),
+    ], "the unit comes from the series name, else the value-axis title"
+    evidence = ev.load(texts=["Revenue was $96.2 billion in Q3 and grew in Q4. Bookings | $ | 310,000 (in thousands)"])
+    findings = check(tmp_path / "u.pptx", evidence, Settings(llm=False)).findings
+    assert [(f.code, f.snippet) for f in findings] == [("ONS001", "Quarterly revenue ($B), Q4: 98.1")]
+
+
+def test_a_deck_chart_that_names_its_unit_is_evidence_at_that_scale(tmp_path):
+    memo = tmp_path / "memo.md"
+    memo.write_text("Q3 revenue was $96.2 billion.\n\nBookings were $310 million.\n\nQ3 revenue was $96.2 million.\n")
+    findings = check(memo, ev.load([unit_deck(tmp_path)]), Settings(llm=False)).findings
+    assert [f.message for f in findings] == ["$96.2 million: no number like it in the evidence"]
+
+
+@pytest.mark.parametrize("name, unit", [
+    ("Quarterly revenue ($B)", ("$", 1e9)), ("Revenue, in $ millions", ("$", 1e6)), ("$ in thousands", ("$", 1e3)),
+    ("USD M", ("$", 1e6)), ("Sales (US$bn)", ("$", 1e9)), ("€m", ("€", 1e6)), ("GBP millions", ("£", 1e6)),
+    ("Revenue", None), ("Revenue ($)", None), ("$5M target", None), ("USD Monthly", None), ("Fusd M", None),
+])
+def test_a_chart_names_its_unit_with_a_currency_and_a_scale(name, unit):
+    assert numbers.stated_unit(name) == unit
+
+
+def test_a_bare_chart_value_under_a_named_unit_is_that_money_and_still_a_magnitude():
+    (q,) = numbers.find("Quarterly revenue ($B), Q3: 96.2", plain=True, unit="$B")[1:]
+    assert (q.kind, q.unit, q.scale) == ("number", "$", 1e9)
+    said = {text: q.matches(numbers.find(text)[0]) for text in
+            ("$96.2 billion", "$96,221M", "96.2 billion", "$96.3B", "€96.2B", "$96.2M", "96.2")}
+    assert said == {"$96.2 billion": True, "$96,221M": True, "96.2 billion": True, "$96.3B": False,
+                    "€96.2B": False, "$96.2M": False, "96.2": True}
+    assert numbers.find("$96.2B")[0].matches(q), "a claim in dollars is stated by the chart"

@@ -60,6 +60,7 @@ class Quantity:
     unit: str = ""  # durations: "month", "year"...; currency: the symbol
     year: int | None = None  # quarters written with a year
     alt: str = ""  # the other kind this number could be; every 1950-2099 number carries one
+    scale: float = 1.0  # a chart value whose chart states its unit ("$B"): the money it is, with `unit`
 
     @property
     def group(self) -> str:
@@ -93,16 +94,18 @@ class Quantity:
 
     def _magnitude(self, other: Quantity) -> bool:
         """A chart value printed with no format is a magnitude and no unit: a number of any kind at
-        that magnitude states it (2400000 is $2.4M, 0.88 is 88%), and it states any."""
+        that magnitude states it (2400000 is $2.4M, 0.88 is 88%), and it states any. Under a chart
+        that states its unit, the money at that scale states it too: 96.2 under "($B)" is $96.2B."""
         plain, unit = (self, other) if self.kind == "number" else (other, self)
         if unit.temporal:
             return False
-        readings = [(unit.value, 1.0)] + ([(unit.value / 100, 0.01)] if unit.group == "percent" else [])
-        for value, scale in readings:
-            tolerance = self.tolerance * (scale if self is unit else 1.0)
-            if abs(plain.value - value) <= tolerance + 1e-9:
-                return True
-        return False
+        readings = [(plain.value, unit.value, self.tolerance)]
+        if unit.group == "percent":
+            readings.append((plain.value, unit.value / 100, self.tolerance * (0.01 if self is unit else 1.0)))
+        if plain.unit and unit.group == "money" and unit.unit in ("", plain.unit):
+            readings.append((plain.value * plain.scale, unit.value,
+                             self.tolerance * (plain.scale if self is plain else 1.0)))
+        return any(abs(a - b) <= tolerance + 1e-9 for a, b, tolerance in readings)
 
 
 def _half_unit(number: str, scale: float = 1.0) -> float:
@@ -183,9 +186,10 @@ def _overlaps(spans, start, end) -> bool:
     return any(start < e and s < end for s, e in spans)
 
 
-def find(text: str, plain: bool = False) -> list[Quantity]:
+def find(text: str, plain: bool = False, unit: str = "") -> list[Quantity]:
     """Every quantity in `text`, longest and most specific first, no overlaps. With `plain`, a
-    number that ends a line is a chart value printed with no format: a magnitude, no unit."""
+    number that ends a line is a chart value printed with no format: a magnitude, no unit. With
+    `unit` as well ("$B", as its chart states it), that magnitude is also money at that scale."""
     taken = [(m.start(), m.end()) for m in NOISE.finditer(text)]
     found = []
     for kind, pattern in PATTERNS:
@@ -199,13 +203,29 @@ def find(text: str, plain: bool = False) -> list[Quantity]:
                 found += qs
             pos = m.end() if qs or kind != "range" else m.start() + 1  # "120% and 2-3x": try again inside
     if plain:
-        found = [replace(q, kind="number", alt="") if q.kind in ("count", "year") and _ends_line(text, q.end) else q
-                 for q in found]
+        symbol, scale = stated_unit(unit) or ("", 1.0)
+        found = [replace(q, kind="number", alt="", unit=symbol, scale=scale)
+                 if q.kind in ("count", "year") and _ends_line(text, q.end) else q for q in found]
     return sorted(found, key=lambda q: q.start)
 
 
 def _ends_line(text: str, end: int) -> bool:
     return not text[end:].split("\n", 1)[0].strip()
+
+
+CURRENCY_CODES = {"usd": "$", "eur": "€", "gbp": "£"}
+# A chart's name for the unit its values are in: "Revenue ($B)", "in $ millions", "USD M", "US$M".
+STATED_UNIT = re.compile(r"([$€£]|(?<![a-z])(?:usd|eur|gbp))\s*(?:in\s+)?"
+                         r"((?:thousand|million|billion|trillion)s?|bn|mm|mn|tn|[kmbt])(?![a-z])", re.I)
+
+
+def stated_unit(text: str) -> tuple[str, float] | None:
+    """The currency symbol and scale `text` names, if it names both; a currency alone scales nothing."""
+    m = STATED_UNIT.search(text)
+    if m is None:
+        return None
+    symbol = m.group(1).lower()
+    return CURRENCY_CODES.get(symbol, symbol), SCALE[m.group(2).lower().removesuffix("s")]
 
 
 DURATION_UNITS = ("day", "week", "month", "quarter", "year")

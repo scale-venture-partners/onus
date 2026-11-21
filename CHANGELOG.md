@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A chart value in General format under a series name, value-axis title or
+  chart title that names a currency and a scale ("Revenue ($B)", "in $
+  millions", "USD M") is read as that money as well as a bare magnitude, so
+  `96.2` is supported by `$96.2 billion` or `$96,221M`. A deck used as evidence
+  states its chart values at that scale too, when all its series share one unit.
+
 - A table under a unit note ("($ in millions)", "in thousands") states its
   dollar amounts at that scale as well, so `$4,210` in the evidence supports a
   claim of `$4.2B`. The unscaled reading stays, for a per-share column, and a
