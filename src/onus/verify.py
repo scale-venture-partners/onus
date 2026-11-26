@@ -74,7 +74,7 @@ def _snippet(text: str, start: int, end: int, pad: int = 60) -> str:
 
 def check_numbers(claim: Claim, evidence: Evidence) -> list[Failure]:
     failures, derived = [], False
-    said = f"{claim.subject or ''} {claim.text}"
+    said = f"{claim.block.context} {claim.subject or ''} {claim.text}"
     for q in claim.quantities:
         hit = next(((p, e) for p in evidence.passages for e in p.quantities
                     if q.matches(e) and p.can_support(e, said)), None)
@@ -83,7 +83,8 @@ def check_numbers(claim: Claim, evidence: Evidence) -> list[Failure]:
                 p, e = hit
                 claim.evidence_source, claim.quote = p.source, _snippet(p.text, e.start, e.end)
             continue
-        made = next(((p, d) for p in evidence.passages for d in p.derived if q.matches(d)), None)
+        made = next(((p, d) for p in evidence.passages for i, d in enumerate(p.derived)
+                     if q.matches(d) and p.can_derive(i, said)), None)
         if made:
             derived = True
             claim.derivations.append(f"{q.raw} = {made[1].raw} in {made[0].source}")

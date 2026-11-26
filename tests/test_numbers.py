@@ -336,7 +336,7 @@ def test_a_chart_value_with_no_format_matches_any_kind_at_its_magnitude():
 
 
 TABLE = ("Q2 results\n($ in millions, except per share)\nRevenue | $4,210 | $3,980\nEPS | $2.46 | $2.39\n"
-         "Shares | 1,720 | 1,710\n\nOutside the table we spent $5,000 on signs.\n")
+         "Operating income | 1,020 | 980\nShares | 1,720 | 1,710\n\nOutside the table we spent $5,000 on signs.\n")
 
 
 def test_a_table_headed_with_a_unit_also_states_its_dollar_amounts_at_that_scale():
@@ -344,8 +344,9 @@ def test_a_table_headed_with_a_unit_also_states_its_dollar_amounts_at_that_scale
     scaled = {s.raw: s.value for s in numbers.scaled(TABLE, q)}
     assert scaled["$4,210"] == 4.21e9 and scaled["$2.46"] == 2.46e6, \
         "every $ amount under the note; per-share columns stay readable unscaled as well"
-    assert "$5,000" not in scaled and "1,720" not in scaled, \
-        "a blank line ends the table; a bare count is no dollar amount"
+    assert "$5,000" not in scaled, "a blank line ends the table"
+    assert scaled["1,020"] == 1.02e9, "a filing prints $ on its first and total rows only; every cell is dollars"
+    assert "1,720" not in scaled, "a share count is no dollar amount"
     assert next(s for s in numbers.scaled(TABLE, q) if s.raw == "$4,210").tolerance == 0.5e6
 
 
@@ -355,8 +356,49 @@ def test_an_amount_that_names_its_own_scale_is_not_scaled_again():
 
 
 def test_a_dollar_sign_in_its_own_cell_marks_the_amount_in_the_next():
+    text = "Revenue | $ | 96.2 | $ | (81.6) |\n"
+    assert [(q.kind, q.value) for q in numbers.find(text)] == [("currency", 96.2), ("currency", 81.6)]
     text = "(in billions)\nRevenue | $ | 96.2 | $ | 81.6 |\nHeadcount | 4,100 |\n"
     assert sorted(s.value for s in numbers.scaled(text, numbers.find(text))) == [81.6e9, 96.2e9]
+
+
+@pytest.mark.parametrize("text", ["(In thousands)\nThree Months Ended\nJune 28, 2025 | June 29, 2024\n",
+                                  "(In thousands)\n | 2025 | 2024\n",
+                                  "(In thousands)\nWeighted average shares outstanding | 63,412\n",
+                                  "(In thousands)\nPounds sold | 9,500\nCustomers | 1,200\n"])
+def test_header_dates_and_rows_that_name_no_money_are_not_scaled(text):
+    assert numbers.scaled(text, numbers.find(text)) == []
+
+
+def test_bare_cells_under_a_unit_note_are_dollars_at_that_scale():
+    text = ("(In thousands, except per share data)\nNet revenues | $ | 74,958 | $ | 93,185\n"
+            "Total operating expenses | 43,503 | 47,648\nLoss from operations | (34,912) | (33,931)\n"
+            "The following table presents selected items as a percentage of net revenues for the periods presented:\n"
+            "Gross profit | 11.5 | 14.7\n")
+    scaled = {s.raw: s.value for s in numbers.scaled(text, numbers.find(text))}
+    assert scaled["43,503"] == 43.503e6 and scaled["34,912"] == pytest.approx(34.912e6)
+    assert set(scaled) == {"$ | 74,958", "$ | 93,185", "43,503", "47,648", "34,912", "33,931"}, \
+        "a line of prose ends the table"
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("Loss from operations | (46.5)% | (36.4)%", [("percent", 46.5), ("percent", 36.4)]),
+    ("a loss of $(34.9)M", [("currency", 34.9e6)]),
+    ("EPS | $ | (0.38) | $ | (0.53)", [("currency", 0.38), ("currency", 0.53)]),
+    ("EPS of $(0.38)", [("currency", 0.38)]),
+])
+def test_accounting_negatives_keep_their_kind(text, expected):
+    assert [(q.kind, pytest.approx(q.value)) for q in numbers.find(text)] == expected
+
+
+@pytest.mark.parametrize("text", ["Delaware | 26-4087597", "SSN 123-45-6789", "call 785-424-1789"])
+def test_an_identifier_joined_by_dashes_is_no_number(text):
+    assert [q.kind for q in numbers.find(text) if q.kind in ("count", "number")] == []
+
+
+@pytest.mark.parametrize("text, value", [("between 10-20000 users", 10), ("follow 1-2-3 steps", 1)])
+def test_a_range_or_sequence_of_short_numbers_keeps_its_first(text, value):
+    assert value in [q.value for q in numbers.find(text)]
 
 
 def test_a_later_note_replaces_the_scale_and_a_table_with_no_note_has_none():

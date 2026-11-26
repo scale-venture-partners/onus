@@ -130,6 +130,26 @@ under this one none did, and the one true number still passed. On the deck's
 42 real numbered claims, one, a chart label "Build 6", went from "supported"
 (by "drifted on six axes") to flagged, which was correct.
 
+## Tables
+
+Table rows (`a | b | c`) are read cell by cell.
+
+- **Evidence cells match only their own row and period.** A cell supports a
+  claim only if the claim shares a word with its row label or column header,
+  and its column's period fits the claim: a "Six Months Ended" column doesn't
+  support a quarterly claim, and a Q2 column doesn't support a Q3 one. A
+  generic label ("Total") takes the section row above it as its subject.
+  Changes and ratios between two cells are checked the same way.
+- **A unit note scales the whole table.** Under "(In thousands)", bare
+  numbers are read as dollars at that scale, so `12,400` supports
+  "$12.4 million". Header rows and rows that count things ("shares") are left
+  alone. `(4.5)%` stays a percentage and `$ | (0.38)` stays money. CSV files
+  are read as tables.
+- **Tables in the checked document keep their unit.** A caption or header
+  naming one unit ("($M)") applies to bare cells, except in rows or columns
+  that are percentages, per-share figures or counts. Rank columns are not
+  claims.
+
 ## Charts
 
 A native chart object carries its numbers exactly, so it is read with no
@@ -223,11 +243,16 @@ results vary by model and run.
   gives many pairs, and one of their changes can match an unrelated
   percentage by coincidence; `--extend-select ONS004` lists every number
   supported only by arithmetic, so each can be checked by hand.
-- **Presence, not subject.** A number is supported if a named evidence file
-  contains it anywhere (from a directory, its sentence must share a word with
-  the claim). "NRR 42%" passes against "ARR up 42%". Catching a right number on
-  the wrong subject is tier 2's job, and it currently judges only claims that
-  tier 1 can't settle.
+- **Presence, not subject, outside tables.** A number in a named evidence
+  file's prose is supported if the file contains it anywhere (from a
+  directory, its sentence must share a word with the claim). "NRR 42%" passes
+  against "ARR up 42%". Table cells match on shared words, not meaning:
+  "Adjusted operating margin" shares nothing with "Loss from operations".
+  Matching ignores sign: "$(0.9)M" matches "$910K". Catching a right number on the wrong subject in prose is
+  tier 2's job, and it currently judges only claims that tier 1 can't settle.
+- **A row claim covers every column.** A claim made of a document table's row
+  carries all its table's period headers, so a Q2 cell can still match the
+  evidence's six-month column when the document's table has one too.
 - **A year and a count can look alike.** Anything from 1950 to 2099 could be
   either, so the words around it decide which it reads as ("2000 users" is a
   count, "in 2000" a year) and which rule code a finding gets. Matching tries

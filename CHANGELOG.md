@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- A statement's cell in the evidence supports a claim only if its row label
+  or column header shares a word with the claim, a cell under a six-month
+  column only a claim that names the half, and one under an annual column any
+  claim but one about a quarter or a half; a change or ratio between two cells
+  is held to the same.
+
+- Under a unit note ("(In thousands)"), every number in a table row's cells
+  is read as dollars at that scale, not only those with a `$` beside them, so
+  `Total operating expenses | 43,503` supports "$43.5 million"; header dates
+  and rows that count shares, staff or customers are not, but a row whose label
+  names a period (`Cash at end of year`) or a cell like `1987` is. Accounting
+  negatives keep their kind: `(36.4)%`, `$ | (0.38)` and `$(34.9)M`.
+
+- A table in the document being checked carries the unit its caption or
+  header names ("Headline Numbers ($M)") to its bare cells, and its caption
+  and header rows to each row's claim, in Markdown, decks and Word.
+
+- A number joined to a long digit run by a dash ("26-4087597") is no longer
+  read as a count.
+
+- A table cell in the evidence is also held to its column's year and quarter
+  ("Q2 FY26" supports no claim about Q3 FY26 or FY25), takes a section row
+  ("Operating income:") as the subject of a generic label ("Total"), and is
+  aligned with its header by place when a cell is blank or "n/m". A unit note
+  just above a blank line still heads its table, and stays with it when long
+  evidence is split. A CSV file is read as a table, one row per line. A lone
+  row of bare counts, a log line or a markdown rule ("|---|") is no statement
+  row, and a rank column in a deck or Word table is no claim.
+
 - A chart value in General format under a series name, value-axis title or
   chart title that names a currency and a scale ("Revenue ($B)", "in $
   millions", "USD M") is read as that money as well as a bare magnitude, so
